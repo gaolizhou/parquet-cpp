@@ -68,8 +68,8 @@ static std::shared_ptr<GroupNode> SetupSchema() {
                                        LogicalType::TIME_MILLIS));
 
   // Create a primitive node named 'int64_field' with type:INT64, repetition:REPEATED
-  fields.push_back(PrimitiveNode::Make("int64_field", Repetition::REPEATED, Type::INT64,
-                                       LogicalType::NONE));
+  //fields.push_back(PrimitiveNode::Make("int64_field", Repetition::REPEATED, Type::INT64,
+  //                                     LogicalType::NONE));
 
   fields.push_back(PrimitiveNode::Make("int96_field", Repetition::REQUIRED, Type::INT96,
                                        LogicalType::NONE));
@@ -89,7 +89,6 @@ static std::shared_ptr<GroupNode> SetupSchema() {
   fields.push_back(PrimitiveNode::Make("flba_field", Repetition::REQUIRED,
                                        Type::FIXED_LEN_BYTE_ARRAY, LogicalType::NONE,
                                        FIXED_LENGTH));
-
   // Create a GroupNode named 'schema' using the primitive nodes defined above
   // This GroupNode is the root node of the schema tree
   return std::static_pointer_cast<GroupNode>(
@@ -104,22 +103,39 @@ int main(int argc, char** argv) {
   // parquet::OPTIONAL fields require only definition level values
   // parquet::REPEATED fields require both definition and repetition level values
   try {
-    // Create a local file output stream instance.
     using FileClass = ::arrow::io::FileOutputStream;
     std::shared_ptr<FileClass> out_file;
-    PARQUET_THROW_NOT_OK(FileClass::Open(PARQUET_FILENAME, &out_file));
-
     // Setup the parquet schema
     std::shared_ptr<GroupNode> schema = SetupSchema();
-
     // Add writer properties
     parquet::WriterProperties::Builder builder;
     builder.compression(parquet::Compression::SNAPPY);
     std::shared_ptr<parquet::WriterProperties> props = builder.build();
+    std::shared_ptr<parquet::ParquetFileWriter> file_writer;
+    if (true) {
+  std::unique_ptr<parquet::ParquetFileReader> parquetReader =
+      parquet::ParquetFileReader::OpenFile(PARQUET_FILENAME, false);
+  std::shared_ptr<parquet::FileMetaData> old_file_meta = parquetReader->metadata();
 
-    // Create a ParquetFileWriter instance
-    std::shared_ptr<parquet::ParquetFileWriter> file_writer =
-        parquet::ParquetFileWriter::Open(out_file, schema, props);
+  // Create a local file output stream instance.
+  PARQUET_THROW_NOT_OK(FileClass::Open(PARQUET_FILENAME, true, &out_file));
+
+  int64_t size = 0;
+  out_file->GetSize(&size);
+  out_file->Seek(size - old_file_meta->size() - 4);
+      // Create a ParquetFileWriter instance
+      file_writer =
+          parquet::ParquetFileWriter::OpenAppend(out_file, schema, old_file_meta,props);
+} else {
+  // Create a local file output stream instance.
+  PARQUET_THROW_NOT_OK(FileClass::Open(PARQUET_FILENAME, &out_file));
+      // Create a ParquetFileWriter instance
+      file_writer =
+          parquet::ParquetFileWriter::Open(out_file, schema, props);
+
+}
+
+
 
     // Append a RowGroup with a specific number of rows.
     parquet::RowGroupWriter* rg_writer =
@@ -141,6 +157,7 @@ int main(int argc, char** argv) {
       int32_writer->WriteBatch(1, nullptr, nullptr, &value);
     }
 
+#if 0
     // Write the Int64 column. Each row has repeats twice.
     parquet::Int64Writer* int64_writer =
         static_cast<parquet::Int64Writer*>(rg_writer->NextColumn());
@@ -154,7 +171,7 @@ int main(int argc, char** argv) {
       }
       int64_writer->WriteBatch(1, &definition_level, &repetition_level, &value);
     }
-
+#endif
     // Write the INT96 column.
     parquet::Int96Writer* int96_writer =
         static_cast<parquet::Int96Writer*>(rg_writer->NextColumn());
@@ -238,11 +255,11 @@ int main(int argc, char** argv) {
 
     // Get the number of RowGroups
     int num_row_groups = file_metadata->num_row_groups();
-    assert(num_row_groups == 1);
+    //assert(num_row_groups == 1);
 
     // Get the number of Columns
     int num_columns = file_metadata->num_columns();
-    assert(num_columns == 8);
+//   assert(num_columns == 8);
 
     // Iterate over all the RowGroups in the file
     for (int r = 0; r < num_row_groups; ++r) {
@@ -299,6 +316,7 @@ int main(int argc, char** argv) {
         i++;
       }
 
+#if 0
       // Get the Column Reader for the Int64 column
       column_reader = row_group_reader->Column(2);
       parquet::Int64Reader* int64_reader =
@@ -326,9 +344,9 @@ int main(int argc, char** argv) {
         }
         i++;
       }
-
+#endif
       // Get the Column Reader for the Int96 column
-      column_reader = row_group_reader->Column(3);
+      column_reader = row_group_reader->Column(2);
       parquet::Int96Reader* int96_reader =
           static_cast<parquet::Int96Reader*>(column_reader.get());
       // Read all the rows in the column
@@ -354,7 +372,7 @@ int main(int argc, char** argv) {
       }
 
       // Get the Column Reader for the Float column
-      column_reader = row_group_reader->Column(4);
+      column_reader = row_group_reader->Column(3);
       parquet::FloatReader* float_reader =
           static_cast<parquet::FloatReader*>(column_reader.get());
       // Read all the rows in the column
@@ -375,7 +393,7 @@ int main(int argc, char** argv) {
       }
 
       // Get the Column Reader for the Double column
-      column_reader = row_group_reader->Column(5);
+      column_reader = row_group_reader->Column(4);
       parquet::DoubleReader* double_reader =
           static_cast<parquet::DoubleReader*>(column_reader.get());
       // Read all the rows in the column
@@ -396,7 +414,7 @@ int main(int argc, char** argv) {
       }
 
       // Get the Column Reader for the ByteArray column
-      column_reader = row_group_reader->Column(6);
+      column_reader = row_group_reader->Column(5);
       parquet::ByteArrayReader* ba_reader =
           static_cast<parquet::ByteArrayReader*>(column_reader.get());
       // Read all the rows in the column
@@ -429,7 +447,7 @@ int main(int argc, char** argv) {
       }
 
       // Get the Column Reader for the FixedLengthByteArray column
-      column_reader = row_group_reader->Column(7);
+      column_reader = row_group_reader->Column(6);
       parquet::FixedLenByteArrayReader* flba_reader =
           static_cast<parquet::FixedLenByteArrayReader*>(column_reader.get());
       // Read all the rows in the column
