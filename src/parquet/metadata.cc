@@ -351,6 +351,7 @@ class FileMetaData::FileMetaDataImpl {
 
  private:
   friend FileMetaDataBuilder;
+  friend FileMetaData;
   uint32_t metadata_len_;
   std::unique_ptr<format::FileMetaData> metadata_;
   void InitSchema() {
@@ -396,6 +397,13 @@ std::shared_ptr<FileMetaData> FileMetaData::Make(const uint8_t* metadata,
                                                  uint32_t* metadata_len) {
   // This FileMetaData ctor is private, not compatible with std::make_shared
   return std::shared_ptr<FileMetaData>(new FileMetaData(metadata, metadata_len));
+}
+
+std::unique_ptr<FileMetaData> FileMetaData::Make(std::unique_ptr<format::FileMetaData> &meta) {
+  auto file_meta_data = std::unique_ptr<FileMetaData>(new FileMetaData());
+  file_meta_data->impl_->metadata_ = std::move(meta);
+  file_meta_data->impl_->InitSchema();
+  return file_meta_data;
 }
 
 FileMetaData::FileMetaData(const uint8_t* metadata, uint32_t* metadata_len)
@@ -445,6 +453,11 @@ const SchemaDescriptor* FileMetaData::schema() const { return impl_->schema(); }
 std::shared_ptr<const KeyValueMetadata> FileMetaData::key_value_metadata() const {
   return impl_->key_value_metadata();
 }
+
+std::unique_ptr<format::FileMetaData> FileMetaData::GetFormatFileMetaData() {
+  return std::move(impl_->metadata_);
+}
+
 
 void FileMetaData::WriteTo(OutputStream* dst) { return impl_->WriteTo(dst); }
 

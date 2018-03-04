@@ -198,7 +198,7 @@ class FileSerializer : public ParquetFileWriter::Contents {
     return row_group_writer_.get();
   }
 
-  ~FileSerializer() override {
+  virtual ~FileSerializer() override {
     try {
       Close();
     } catch (...) {
@@ -206,6 +206,7 @@ class FileSerializer : public ParquetFileWriter::Contents {
   }
 
  private:
+  friend class ZdbFileSerializer;
   FileSerializer(const std::shared_ptr<OutputStream>& sink,
                  const std::shared_ptr<GroupNode>& schema,
                  const std::shared_ptr<WriterProperties>& properties,
@@ -233,7 +234,7 @@ class FileSerializer : public ParquetFileWriter::Contents {
     sink_->Write(PARQUET_MAGIC, 4);
   }
 
-  void WriteMetaData() {
+  virtual void WriteMetaData() {
     // Write MetaData
     uint32_t metadata_len = static_cast<uint32_t>(sink_->Tell());
 
@@ -319,5 +320,65 @@ RowGroupWriter* ParquetFileWriter::AppendRowGroup(int64_t num_rows) {
 const std::shared_ptr<WriterProperties>& ParquetFileWriter::properties() const {
   return contents_->properties();
 }
+
+class ZdbFileSerializer : public FileSerializer {
+ public:
+  static std::unique_ptr<ParquetFileWriter::Contents> Open(
+      const std::shared_ptr<OutputStream> &sink,
+      const std::shared_ptr<GroupNode> &schema,
+      const std::shared_ptr<WriterProperties> &properties,
+      const std::shared_ptr<const KeyValueMetadata> &key_value_metadata,
+      std::shared_ptr<parquet::FileMetaData> old_file_meta = nullptr) {
+    std::unique_ptr<ParquetFileWriter::Contents> result(
+        new ZdbFileSerializer(sink, schema, properties, key_value_metadata, old_file_meta));
+
+    return result;
+  }
+
+  virtual void WriteMetaData() {
+    //modify meta
+    // Write MetaData
+    uint32_t metadata_len = static_cast<uint32_t>(sink_->Tell());
+
+    // Get a FileMetaData
+    auto metadata = metadata_->Finish();
+
+    auto metadata_target = metadata->GetFormatFileMetaData();
+    auto metadata_old = old_file_meta_->GetFormatFileMetaData();
+
+    metadata_target->row_groups.insert(metadata_target->row_groups.begin(),
+                                       metadata_old->row_groups.begin(),
+                                       metadata_old->row_groups.end());
+    metadata_target->num_rows += metadata_old->num_rows;
+
+    //FIXME key_value_metadata
+
+    auto new_meta = FileMetaData::Make(metadata_target);
+
+    new_meta->WriteTo(sink_.get());
+    metadata_len = static_cast<uint32_t>(sink_->Tell()) - metadata_len;
+
+    // Write Footer
+    sink_->Write(reinterpret_cast<uint8_t*>(&metadata_len), 4);
+    sink_->Write(PARQUET_MAGIC, 4);
+  }
+ private:
+  ZdbFileSerializer(const std::shared_ptr<OutputStream> &sink,
+                    const std::shared_ptr<GroupNode> &schema,
+                    const std::shared_ptr<WriterProperties> &properties,
+                    const std::shared_ptr<const KeyValueMetadata> &key_value_metadata,
+                    std::shared_ptr<parquet::FileMetaData> old_file_meta)
+      : FileSerializer(sink, schema, properties, key_value_metadata), old_file_meta_(old_file_meta) {
+    if (!old_file_meta_) {
+      StartFile();
+      return;
+    }
+  }
+
+
+  std::shared_ptr<parquet::FileMetaData> old_file_meta_;
+};
+
+
 
 }  // namespace parquet

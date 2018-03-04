@@ -30,6 +30,7 @@
 #include "parquet/types.h"
 #include "parquet/util/memory.h"
 #include "parquet/util/visibility.h"
+#include "parquet_types.h"
 
 namespace parquet {
 
@@ -154,6 +155,7 @@ class PARQUET_EXPORT FileMetaData {
   // API convenience to get a MetaData accessor
   static std::shared_ptr<FileMetaData> Make(const uint8_t* serialized_metadata,
                                             uint32_t* metadata_len);
+  static std::unique_ptr<FileMetaData> Make(std::unique_ptr<format::FileMetaData> &meta);
 
   ~FileMetaData();
 
@@ -173,6 +175,8 @@ class PARQUET_EXPORT FileMetaData {
 
   // Return const-pointer to make it clear that this object is not to be copied
   const SchemaDescriptor* schema() const;
+
+  std::unique_ptr<format::FileMetaData> GetFormatFileMetaData();
 
   std::shared_ptr<const KeyValueMetadata> key_value_metadata() const;
 
