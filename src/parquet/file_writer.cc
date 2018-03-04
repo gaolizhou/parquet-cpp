@@ -282,6 +282,36 @@ class ZdbFileSerializer : public FileSerializer {
     metadata_target->num_rows += metadata_old->num_rows;
 
     //FIXME key_value_metadata
+    std::map<std::string, std::string> kv_meta;
+    std::transform(metadata_old->key_value_metadata.begin(),
+                   metadata_old->key_value_metadata.end(),
+                   std::inserter(kv_meta, std::begin(kv_meta)),
+                   [](const format::KeyValue &kv){
+                     return std::make_pair(kv.key, kv.value);
+                   });
+    std::transform(metadata_target->key_value_metadata.begin(),
+                   metadata_target->key_value_metadata.end(),
+                   std::inserter(kv_meta, std::begin(kv_meta)),
+                   [](const format::KeyValue &kv){
+                     return std::make_pair(kv.key, kv.value);
+                   });
+
+    metadata_target->key_value_metadata.clear();
+
+    std::transform(kv_meta.begin(), kv_meta.end(),
+                   std::back_inserter(metadata_target->key_value_metadata),
+    [](const std::pair<std::string, std::string> &kv){
+      format::KeyValue key_value;
+      key_value.key = kv.first;
+      key_value.value = kv.second;
+      return key_value;
+    });
+
+    if (!metadata_target->key_value_metadata.empty()) {
+      metadata_target->__isset.key_value_metadata = true;
+    } else {
+      metadata_target->__isset.key_value_metadata = false;
+    }
 
     auto new_meta = FileMetaData::Make(metadata_target);
 
