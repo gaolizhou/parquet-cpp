@@ -45,7 +45,9 @@ void RowGroupWriter::Close() {
   }
 }
 
-ColumnWriter* RowGroupWriter::NextColumn() { return contents_->NextColumn(); }
+ColumnWriter* RowGroupWriter::NextColumn(const std::map<std::string, std::string> &meta) {
+  return contents_->NextColumn(meta);
+}
 
 int RowGroupWriter::current_column() { return contents_->current_column(); }
 
@@ -78,13 +80,13 @@ class RowGroupSerializer : public RowGroupWriter::Contents {
     return num_rows_ < 0 ? 0 : num_rows_;
   }
 
-  ColumnWriter* NextColumn() override {
+  ColumnWriter* NextColumn(const std::map<std::string, std::string> &meta) override {
     if (current_column_writer_) {
       CheckRowsWritten();
     }
 
     // Throws an error if more columns are being written
-    auto col_meta = metadata_->NextColumnChunk();
+    auto col_meta = metadata_->NextColumnChunk(meta);
 
     if (current_column_writer_) {
       total_bytes_written_ += current_column_writer_->Close();
@@ -303,6 +305,7 @@ class ZdbFileSerializer : public FileSerializer {
     [](const std::pair<std::string, std::string> &kv){
       format::KeyValue key_value;
       key_value.key = kv.first;
+      key_value.__isset.value = true;
       key_value.value = kv.second;
       return key_value;
     });

@@ -934,15 +934,15 @@ class FileWriter::Impl {
     return Status::OK();
   }
 
-  Status WriteColumnChunk(const Array& data) {
+  Status WriteColumnChunk(const Array& data, const std::map<std::string, std::string> &meta = {}) {
     // A bit awkward here since cannot instantiate ChunkedArray from const Array&
     ::arrow::ArrayVector chunks = {::arrow::MakeArray(data.data())};
     auto chunked_array = std::make_shared<::arrow::ChunkedArray>(chunks);
-    return WriteColumnChunk(chunked_array, 0, data.length());
+    return WriteColumnChunk(chunked_array, 0, data.length(), meta);
   }
 
   Status WriteColumnChunk(const std::shared_ptr<ChunkedArray>& data, int64_t offset,
-                          const int64_t size) {
+                          const int64_t size, const std::map<std::string, std::string> &meta = {}) {
     // DictionaryArrays are not yet handled with a fast path. To still support
     // writing them as a workaround, we convert them back to their non-dictionary
     // representation.
@@ -954,7 +954,7 @@ class FileWriter::Impl {
       // version that has this fixed.
       if (dict_type.dictionary()->type()->id() == ::arrow::Type::NA) {
         auto null_array = std::make_shared<::arrow::NullArray>(data->length());
-        return WriteColumnChunk(*null_array);
+        return WriteColumnChunk(*null_array, meta);
       }
 
       FunctionContext ctx(this->memory_pool());
@@ -962,11 +962,11 @@ class FileWriter::Impl {
       ::arrow::compute::Datum cast_output;
       RETURN_NOT_OK(Cast(&ctx, cast_input, dict_type.dictionary()->type(), CastOptions(),
                          &cast_output));
-      return WriteColumnChunk(cast_output.chunked_array(), 0, data->length());
+      return WriteColumnChunk(cast_output.chunked_array(), 0, data->length(), meta);
     }
 
     ColumnWriter* column_writer;
-    PARQUET_CATCH_NOT_OK(column_writer = row_group_writer_->NextColumn());
+    PARQUET_CATCH_NOT_OK(column_writer = row_group_writer_->NextColumn(meta));
 
     // TODO(wesm): This trick to construct a schema for one Parquet root node
     // will not work for arbitrary nested data
@@ -1002,17 +1002,20 @@ Status FileWriter::NewRowGroup(int64_t chunk_size) {
   return impl_->NewRowGroup(chunk_size);
 }
 
-Status FileWriter::WriteColumnChunk(const ::arrow::Array& data) {
-  return impl_->WriteColumnChunk(data);
+Status FileWriter::WriteColumnChunk(const ::arrow::Array& data,
+                                    const std::map<std::string, std::string> &meta) {
+  return impl_->WriteColumnChunk(data, meta);
 }
 
 Status FileWriter::WriteColumnChunk(const std::shared_ptr<::arrow::ChunkedArray>& data,
-                                    const int64_t offset, const int64_t size) {
-  return impl_->WriteColumnChunk(data, offset, size);
+                                    const int64_t offset, const int64_t size,
+                                    const std::map<std::string, std::string> &meta) {
+  return impl_->WriteColumnChunk(data, offset, size, meta);
 }
 
-Status FileWriter::WriteColumnChunk(const std::shared_ptr<::arrow::ChunkedArray>& data) {
-  return WriteColumnChunk(data, 0, data->length());
+Status FileWriter::WriteColumnChunk(const std::shared_ptr<::arrow::ChunkedArray>& data,
+                                    const std::map<std::string, std::string> &meta) {
+  return WriteColumnChunk(data, 0, data->length(), meta);
 }
 
 Status FileWriter::Close() { return impl_->Close(); }

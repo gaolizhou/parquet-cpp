@@ -196,7 +196,8 @@ class PARQUET_EXPORT ColumnChunkMetaDataBuilder {
   // API convenience to get a MetaData reader
   static std::unique_ptr<ColumnChunkMetaDataBuilder> Make(
       const std::shared_ptr<WriterProperties>& props, const ColumnDescriptor* column,
-      uint8_t* contents);
+      uint8_t* contents,
+      const std::map<std::string, std::string> &meta = {});
 
   ~ColumnChunkMetaDataBuilder();
 
@@ -207,6 +208,7 @@ class PARQUET_EXPORT ColumnChunkMetaDataBuilder {
   void SetStatistics(bool is_signed, const EncodedStatistics& stats);
   // get the column descriptor
   const ColumnDescriptor* descr() const;
+
   // commit the metadata
   void Finish(int64_t num_values, int64_t dictonary_page_offset,
               int64_t index_page_offset, int64_t data_page_offset,
@@ -218,7 +220,8 @@ class PARQUET_EXPORT ColumnChunkMetaDataBuilder {
 
  private:
   explicit ColumnChunkMetaDataBuilder(const std::shared_ptr<WriterProperties>& props,
-                                      const ColumnDescriptor* column, uint8_t* contents);
+                                      const ColumnDescriptor* column, uint8_t* contents,
+                                      const std::map<std::string, std::string> &meta);
   // PIMPL Idiom
   class ColumnChunkMetaDataBuilderImpl;
   std::unique_ptr<ColumnChunkMetaDataBuilderImpl> impl_;
@@ -233,7 +236,7 @@ class PARQUET_EXPORT RowGroupMetaDataBuilder {
 
   ~RowGroupMetaDataBuilder();
 
-  ColumnChunkMetaDataBuilder* NextColumnChunk();
+  ColumnChunkMetaDataBuilder* NextColumnChunk(const std::map<std::string, std::string> &meta = {});
   int num_columns();
   int64_t num_rows();
   int current_column() const;

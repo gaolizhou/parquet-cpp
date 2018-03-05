@@ -49,7 +49,7 @@ class PARQUET_EXPORT RowGroupWriter {
     virtual int num_columns() const = 0;
     virtual int64_t num_rows() const = 0;
 
-    virtual ColumnWriter* NextColumn() = 0;
+    virtual ColumnWriter* NextColumn(const std::map<std::string, std::string> &meta = {}) = 0;
     virtual int current_column() const = 0;
     virtual void Close() = 0;
   };
@@ -62,7 +62,7 @@ class PARQUET_EXPORT RowGroupWriter {
   /// valid until the next call to NextColumn or Close. As the contents are
   /// directly written to the sink, once a new column is started, the contents
   /// of the previous one cannot be modified anymore.
-  ColumnWriter* NextColumn();
+  ColumnWriter* NextColumn(const std::map<std::string, std::string> &meta = {});
   /// Index of currently written column
   int current_column();
   void Close();

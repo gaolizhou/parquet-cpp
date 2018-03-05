@@ -560,13 +560,14 @@ class ColumnChunkMetaDataBuilder::ColumnChunkMetaDataBuilderImpl {
  public:
   explicit ColumnChunkMetaDataBuilderImpl(const std::shared_ptr<WriterProperties>& props,
                                           const ColumnDescriptor* column,
-                                          uint8_t* contents)
+                                          uint8_t* contents,const std::map<std::string, std::string> &meta)
       : properties_(props), column_(column) {
     column_chunk_ = reinterpret_cast<format::ColumnChunk*>(contents);
     column_chunk_->meta_data.__set_type(ToThrift(column->physical_type()));
     column_chunk_->meta_data.__set_path_in_schema(column->path()->ToDotVector());
     column_chunk_->meta_data.__set_codec(
         ToThrift(properties_->compression(column->path())));
+    set_key_value_metadata(meta);
   }
   ~ColumnChunkMetaDataBuilderImpl() {}
 
@@ -637,6 +638,22 @@ class ColumnChunkMetaDataBuilder::ColumnChunkMetaDataBuilderImpl {
   }
 
   const ColumnDescriptor* descr() const { return column_; }
+ private:
+  void set_key_value_metadata(const std::map<std::string, std::string> &meta) {
+    if (meta.empty()) {
+      return;
+    }
+    column_chunk_->meta_data.__isset.key_value_metadata = true;
+    std::transform(meta.begin(), meta.end(),
+                   std::back_inserter(column_chunk_->meta_data.key_value_metadata),
+                   [](const std::pair<std::string, std::string> &kv){
+                     format::KeyValue key_value;
+                     key_value.key = kv.first;
+                     key_value.__isset.value = true;
+                     key_value.value = kv.second;
+                     return key_value;
+                   });
+  }
 
  private:
   format::ColumnChunk* column_chunk_;
@@ -646,16 +663,16 @@ class ColumnChunkMetaDataBuilder::ColumnChunkMetaDataBuilderImpl {
 
 std::unique_ptr<ColumnChunkMetaDataBuilder> ColumnChunkMetaDataBuilder::Make(
     const std::shared_ptr<WriterProperties>& props, const ColumnDescriptor* column,
-    uint8_t* contents) {
+    uint8_t* contents, const std::map<std::string, std::string> &meta) {
   return std::unique_ptr<ColumnChunkMetaDataBuilder>(
-      new ColumnChunkMetaDataBuilder(props, column, contents));
+      new ColumnChunkMetaDataBuilder(props, column, contents, meta));
 }
 
 ColumnChunkMetaDataBuilder::ColumnChunkMetaDataBuilder(
     const std::shared_ptr<WriterProperties>& props, const ColumnDescriptor* column,
-    uint8_t* contents)
+    uint8_t* contents,const std::map<std::string, std::string> &meta)
     : impl_{std::unique_ptr<ColumnChunkMetaDataBuilderImpl>(
-          new ColumnChunkMetaDataBuilderImpl(props, column, contents))} {}
+          new ColumnChunkMetaDataBuilderImpl(props, column, contents, meta))} {}
 
 ColumnChunkMetaDataBuilder::~ColumnChunkMetaDataBuilder() {}
 
@@ -694,7 +711,7 @@ class RowGroupMetaDataBuilder::RowGroupMetaDataBuilderImpl {
   }
   ~RowGroupMetaDataBuilderImpl() {}
 
-  ColumnChunkMetaDataBuilder* NextColumnChunk() {
+  ColumnChunkMetaDataBuilder* NextColumnChunk(const std::map<std::string, std::string> &meta) {
     if (!(current_column_ < num_columns())) {
       std::stringstream ss;
       ss << "The schema only has " << num_columns()
@@ -704,7 +721,7 @@ class RowGroupMetaDataBuilder::RowGroupMetaDataBuilderImpl {
     auto column = schema_->Column(current_column_);
     auto column_builder = ColumnChunkMetaDataBuilder::Make(
         properties_, column,
-        reinterpret_cast<uint8_t*>(&row_group_->columns[current_column_++]));
+        reinterpret_cast<uint8_t*>(&row_group_->columns[current_column_++]), meta);
     auto column_builder_ptr = column_builder.get();
     column_builders_.push_back(std::move(column_builder));
     return column_builder_ptr;
@@ -766,8 +783,8 @@ RowGroupMetaDataBuilder::RowGroupMetaDataBuilder(
 
 RowGroupMetaDataBuilder::~RowGroupMetaDataBuilder() {}
 
-ColumnChunkMetaDataBuilder* RowGroupMetaDataBuilder::NextColumnChunk() {
-  return impl_->NextColumnChunk();
+ColumnChunkMetaDataBuilder* RowGroupMetaDataBuilder::NextColumnChunk(const std::map<std::string, std::string> &meta) {
+  return impl_->NextColumnChunk(meta);
 }
 
 int RowGroupMetaDataBuilder::current_column() const { return impl_->current_column(); }
