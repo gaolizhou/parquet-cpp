@@ -115,6 +115,8 @@ class PARQUET_EXPORT ColumnChunkMetaData {
   int64_t total_compressed_size() const;
   int64_t total_uncompressed_size() const;
 
+  std::map<std::string, std::string> GetKeyValueMetadata() const;
+
  private:
   explicit ColumnChunkMetaData(const uint8_t* metadata, const ColumnDescriptor* descr,
                                const ApplicationVersion* writer_version = nullptr);

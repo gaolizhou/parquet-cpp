@@ -154,6 +154,19 @@ class ColumnChunkMetaData::ColumnChunkMetaDataImpl {
   inline int64_t total_uncompressed_size() const {
     return column_->meta_data.total_uncompressed_size;
   }
+  std::map<std::string, std::string> GetKeyValueMetadata() const {
+    if(!column_->__isset.meta_data || !column_->meta_data.__isset.key_value_metadata) {
+      return {};
+    }
+    std::map<std::string, std::string> kv;
+    std::transform(column_->meta_data.key_value_metadata.cbegin(),
+                   column_->meta_data.key_value_metadata.cend(),
+                   std::inserter(kv, kv.end()),
+                   [](const format::KeyValue &key_value){
+                     return std::make_pair(key_value.key, key_value.value);
+                   });
+    return kv;
+  };
 
  private:
   mutable std::shared_ptr<RowGroupStatistics> stats_;
@@ -228,6 +241,10 @@ int64_t ColumnChunkMetaData::total_uncompressed_size() const {
 
 int64_t ColumnChunkMetaData::total_compressed_size() const {
   return impl_->total_compressed_size();
+}
+
+std::map<std::string, std::string> ColumnChunkMetaData::GetKeyValueMetadata() const {
+  return impl_->GetKeyValueMetadata();
 }
 
 // row-group metadata
