@@ -472,7 +472,7 @@ std::shared_ptr<const KeyValueMetadata> FileMetaData::key_value_metadata() const
 }
 
 std::unique_ptr<format::FileMetaData> FileMetaData::GetFormatFileMetaData() {
-  return std::move(impl_->metadata_);
+  return std::unique_ptr<format::FileMetaData>(new format::FileMetaData(*impl_->metadata_));
 }
 
 
